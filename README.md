@@ -1,4 +1,4 @@
-# 🤖 GitLab Issue-to-MR AI Agent
+# 🤖 GitLab Issue-to-MR AI Agent [![Skill Source](https://img.shields.io/badge/skill%20source-corvd--ai--skills-blue?style=flat-square)](https://github.com/cdcent/corvd-ai-skills/blob/dev/README.md)
 
 > Write an issue. Label it. Walk away. Come back to a Merge Request.
 
