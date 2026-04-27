@@ -2,7 +2,7 @@
 
 > Write an issue. Label it. Walk away. Come back to a Merge Request.
 
-> Built on the foundation of the [corvd-ai-skills](https://github.com/cdcent/corvd-ai-skills/blob/dev/README.md) workflow and extended for GitLab — this agent watches your project for issues labelled `ai-fix`, reads the description, writes the fix, runs your tests, and opens a Merge Request — all without you touching a terminal.
+> Built on the foundation of the [corvd-ai-skills](https://github.com/cdcent/corvd-ai-skills/blob/dev/README.md) workflow and extended for GitLab, this agent watches your project for issues labelled `ai-fix`, reads the description, writes the fix, runs your tests, and opens a Merge Request, all without you touching a terminal.
 >
 > **It never merges its own MR. That part is always yours.**
 
