@@ -40,15 +40,65 @@ def test_non_issue_event_ignored():
     r = client.post(
         "/webhook",
         headers={"X-Gitlab-Token": "test-secret", "X-Gitlab-Event": "Push Hook"},
-        json={},
+        json={"ref": "refs/heads/feature-x", "after": "abc123", "commits": []},
     )
     assert r.status_code == 200
     assert r.json()["status"] == "ignored"
 
 
+def test_push_to_dev_starts_readme_review():
+    payload = {
+        "ref": "refs/heads/dev",
+        "after": "d34db33f",
+        "commits": [{"added": [], "modified": ["agent/server.py"], "removed": []}],
+    }
+    with patch("agent.server.run_readme_review_for_push"):
+        r = client.post(
+            "/webhook",
+            headers={"X-Gitlab-Token": "test-secret", "X-Gitlab-Event": "Push Hook"},
+            json=payload,
+        )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "readme_review_started"
+    assert body["branch"] == "dev"
+    assert body["after"] == "d34db33f"
+
+
+def test_duplicate_push_delivery_is_ignored():
+    payload = {
+        "ref": "refs/heads/dev",
+        "after": "feedbeef",
+        "commits": [{"added": [], "modified": ["agent/server.py"], "removed": []}],
+    }
+
+    with patch("agent.server.run_readme_review_for_push"):
+        first = client.post(
+            "/webhook",
+            headers={"X-Gitlab-Token": "test-secret", "X-Gitlab-Event": "Push Hook"},
+            json=payload,
+        )
+        second = client.post(
+            "/webhook",
+            headers={"X-Gitlab-Token": "test-secret", "X-Gitlab-Event": "Push Hook"},
+            json=payload,
+        )
+
+    assert first.status_code == 200
+    assert first.json()["status"] == "readme_review_started"
+    assert second.status_code == 200
+    assert second.json()["status"] == "ignored"
+    assert "duplicate push delivery" in second.json()["reason"]
+
+
 def test_issue_without_ai_fix_label_ignored():
     payload = {
-        "object_attributes": {"iid": 1, "state": "opened", "title": "Some issue", "description": ""},
+        "object_attributes": {
+            "iid": 1,
+            "state": "opened",
+            "title": "Some issue",
+            "description": "",
+        },
         "labels": [],
     }
     r = client.post(
