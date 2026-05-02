@@ -16,22 +16,36 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialise the GitLab client once at import time
-gl = gitlab.Gitlab(
-    url=os.getenv("GITLAB_URL", "https://gitlab.com"),
-    private_token=os.getenv("GITLAB_TOKEN"),
-)
-gl.auth()
+_gl_client = None
+_project = None
 
-project = gl.projects.get(os.getenv("GITLAB_PROJECT_ID"))
+
+def _get_project():
+    """Lazily initialize and return the authenticated GitLab project."""
+    global _gl_client, _project
+
+    if _project is not None:
+        return _project
+
+    _gl_client = gitlab.Gitlab(
+        url=os.getenv("GITLAB_URL", "https://gitlab.com"),
+        private_token=os.getenv("GITLAB_TOKEN"),
+    )
+    _gl_client.auth()
+
+    project_id = os.getenv("GITLAB_PROJECT_ID")
+    _project = _gl_client.projects.get(project_id)
+    return _project
 
 
 # ---------------------------------------------------------------------------
 # Repository read operations
 # ---------------------------------------------------------------------------
 
+
 def get_repository_tree(path: str = "", recursive: bool = True) -> list[str]:
     """Return a flat list of all file paths in the repository (or a subdirectory)."""
+    project = _get_project()
     items = project.repository_tree(path=path, recursive=recursive, all=True)
     return [item["path"] for item in items if item["type"] == "blob"]
 
@@ -42,6 +56,7 @@ def get_file_content(file_path: str, ref: str = "dev") -> str:
     Returns an error string if the file does not exist.
     """
     try:
+        project = _get_project()
         f = project.files.get(file_path=file_path, ref=ref)
         return f.decode().decode("utf-8")
     except Exception as e:
@@ -51,6 +66,7 @@ def get_file_content(file_path: str, ref: str = "dev") -> str:
 def file_exists(file_path: str, ref: str) -> bool:
     """Return True if the file exists on the given branch."""
     try:
+        project = _get_project()
         project.files.get(file_path=file_path, ref=ref)
         return True
     except Exception:
@@ -61,8 +77,10 @@ def file_exists(file_path: str, ref: str) -> bool:
 # Branch operations
 # ---------------------------------------------------------------------------
 
+
 def create_branch(branch_name: str, base_branch: str = "dev") -> None:
     """Create a new branch from base_branch. Raises on failure."""
+    project = _get_project()
     project.branches.create({"branch": branch_name, "ref": base_branch})
 
 
@@ -70,7 +88,10 @@ def create_branch(branch_name: str, base_branch: str = "dev") -> None:
 # Commit operations
 # ---------------------------------------------------------------------------
 
-def commit_files(branch_name: str, commit_message: str, file_changes: list[dict]) -> None:
+
+def commit_files(
+    branch_name: str, commit_message: str, file_changes: list[dict]
+) -> None:
     """
     Commit one or more file changes to a branch in a single commit.
 
@@ -79,16 +100,20 @@ def commit_files(branch_name: str, commit_message: str, file_changes: list[dict]
       - file_path: path relative to repo root
       - content:   full file content (not required for delete)
     """
-    project.commits.create({
-        "branch": branch_name,
-        "commit_message": commit_message,
-        "actions": file_changes,
-    })
+    project = _get_project()
+    project.commits.create(
+        {
+            "branch": branch_name,
+            "commit_message": commit_message,
+            "actions": file_changes,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Merge request operations
 # ---------------------------------------------------------------------------
+
 
 def create_merge_request(branch_name: str, title: str, description: str) -> str:
     """
@@ -96,13 +121,16 @@ def create_merge_request(branch_name: str, title: str, description: str) -> str:
     Returns the web URL of the created MR.
     """
     target = os.getenv("DEFAULT_BASE_BRANCH", "dev")
-    mr = project.mergerequests.create({
-        "source_branch": branch_name,
-        "target_branch": target,
-        "title": title,
-        "description": description,
-        "remove_source_branch": True,
-    })
+    project = _get_project()
+    mr = project.mergerequests.create(
+        {
+            "source_branch": branch_name,
+            "target_branch": target,
+            "title": title,
+            "description": description,
+            "remove_source_branch": True,
+        }
+    )
     return mr.web_url
 
 
@@ -110,18 +138,29 @@ def create_merge_request(branch_name: str, title: str, description: str) -> str:
 # Issue comment operations
 # ---------------------------------------------------------------------------
 
+
 def post_issue_comment(issue_number: int, comment: str) -> None:
     """Post a markdown comment on a GitLab issue."""
+    project = _get_project()
     issue = project.issues.get(issue_number)
     issue.notes.create({"body": comment})
+
+
+def post_commit_comment(commit_sha: str, comment: str) -> None:
+    """Post a markdown comment on a GitLab commit."""
+    project = _get_project()
+    commit = project.commits.get(commit_sha)
+    commit.comments.create({"note": comment})
 
 
 # ---------------------------------------------------------------------------
 # CI pipeline operations
 # ---------------------------------------------------------------------------
 
+
 def trigger_pipeline(branch_name: str) -> int:
     """Trigger a CI pipeline on the given branch and return the pipeline ID."""
+    project = _get_project()
     pipeline = project.pipelines.create({"ref": branch_name})
     return pipeline.id
 
@@ -131,6 +170,7 @@ def poll_pipeline(pipeline_id: int, timeout: int = 300) -> str:
     Poll a pipeline until it completes or times out.
     Returns "TESTS PASSED", "TESTS FAILED: <jobs>", or "TESTS TIMEOUT".
     """
+    project = _get_project()
     start = time.time()
     while time.time() - start < timeout:
         time.sleep(15)
