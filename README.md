@@ -236,6 +236,20 @@ For production, put it behind a reverse proxy (nginx or Caddy) with a valid TLS 
 
 ---
 
+## Branch Strategy
+
+```
+main  ←  stable releases only
+  └── dev  ←  long-lived integration branch
+        └── <issue-number>-<issue-title-slug>  ←  feature branch per issue
+```
+
+All feature work branches from `dev` and merges back via an MR targeting `dev`. Only maintainers merge `dev` → `main`.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workflow, including the one-time setup command to create the `dev` branch.
+
+---
+
 ## Credits
 
 The workflow in `SKILL.md` — issue-first branching, branch naming, MR targeting — is taken from the **corvd-ai-skills** repository by [@cdcent](https://github.com/cdcent):
